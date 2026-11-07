@@ -24,6 +24,7 @@
 #ifndef TVM_TARGET_SOURCE_CODEGEN_C_H_
 #define TVM_TARGET_SOURCE_CODEGEN_C_H_
 
+#include <tvm/arith/analyzer.h>
 #include <tvm/ir/op.h>
 #include <tvm/target/codegen.h>
 #include <tvm/tirx/analysis.h>
@@ -333,6 +334,14 @@ class CodeGenC : public ExprFunctor<void(const PrimExpr&, std::ostream&)>,
    * access when the outer condition is false.
    */
   std::vector<std::string> select_condition_stack_;
+  /*!
+   * \brief Analyzer that knows the value of each integer variable that a Bind
+   *  statement defines.
+   *
+   * The alignment proofs of vector accesses use this analyzer, so a base that
+   * refers to a bound variable proves aligned when its inlined value does.
+   */
+  arith::Analyzer analyzer_;
 
  private:
   /*! \brief set of volatile buf access */
