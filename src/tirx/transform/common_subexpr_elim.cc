@@ -564,11 +564,15 @@ class CSEPlanner : public StmtExprVisitor {
     current_scope_ = saved;
   }
 
-  /*! \brief AllocBuffer is flat (no body). Visit buffer shape expressions. */
-  void VisitStmt_(const AllocBufferNode* op) override { VisitBufferDef(op->buffer, true); }
-
-  /*! \brief DeclBuffer is flat (no body). Visit buffer shape expressions. */
-  void VisitStmt_(const DeclBufferNode* op) override { VisitBufferDef(op->buffer, false); }
+  /*!
+   * \brief AllocBuffer and DeclBuffer: the fields of the buffer take no part in CSE.
+   *
+   * The shape, the strides and the offset of a buffer describe the buffer. A binding of
+   * them would turn a description into a computation, which can need a variable that the
+   * function does not define, such as a dynamic extent that only the buffer definitions
+   * of a device function name.
+   */
+  void VisitBufferDef(const Buffer& buffer, bool alloc_data) override {}
 
   // ------------------------------------------------------------------
   // ComputePlan: convert scan results into the output plan
@@ -747,6 +751,14 @@ class CSERewriter : public StmtExprMutator {
     }
     return visited;
   }
+
+  /*!
+   * \brief Keep each buffer definition as it is.
+   *
+   * The planner records no expression of a buffer definition, and a binding of the body
+   * can come after the definition, so the fields of the buffer keep their expressions.
+   */
+  Buffer VisitBufferDef(const Buffer& buffer, bool alloc_data) override { return buffer; }
 
  private:
   /*! \brief Plan: stmts to insert before each target. */
