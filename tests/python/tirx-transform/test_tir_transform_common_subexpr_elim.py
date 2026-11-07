@@ -713,6 +713,54 @@ def test_let_floordiv_pattern():
     assert "cse_v" not in script, f"CSE incorrectly extracted from Let body:\n{script}"
 
 
+# =====================================================================
+# T22: Buffer definitions -- a shared shape is not extracted
+# Two buffer definitions with one shape describe their buffers, so the
+# shape gets no binding.
+# =====================================================================
+def test_buffer_definition_no_extraction():
+    @tvm.script.ir_module
+    class Before:
+        @T.prim_func
+        def main(A_data: T.handle("int32"), B_data: T.handle("int32"), n: T.int32, m: T.int32):
+            A = T.decl_buffer((n * m,), "int32", data=A_data)
+            B = T.decl_buffer((n * m,), "int32", data=B_data)
+            A[0] = 1
+            B[0] = 2
+
+    after = tvm.tirx.transform.CommonSubexprElim()(Before)
+    tvm.ir.assert_structural_equal(after, Before)
+
+
+# =====================================================================
+# T23: Buffer definitions -- the shapes keep their expressions
+# The body computes the shape twice, so it gets a binding, and the
+# buffer definitions keep the expression of the shape.
+# =====================================================================
+def test_buffer_definition_keeps_shape():
+    @tvm.script.ir_module
+    class Before:
+        @T.prim_func
+        def main(A_data: T.handle("int32"), B_data: T.handle("int32"), n: T.int32, m: T.int32):
+            A = T.decl_buffer((n * m,), "int32", data=A_data)
+            B = T.decl_buffer((n * m,), "int32", data=B_data)
+            A[0] = n * m
+            B[0] = n * m
+
+    @tvm.script.ir_module
+    class Expected:
+        @T.prim_func
+        def main(A_data: T.handle("int32"), B_data: T.handle("int32"), n: T.int32, m: T.int32):
+            A = T.decl_buffer((n * m,), "int32", data=A_data)
+            B = T.decl_buffer((n * m,), "int32", data=B_data)
+            cse_v1 = T.bind(n * m)
+            A[0] = cse_v1
+            B[0] = cse_v1
+
+    after = tvm.tirx.transform.CommonSubexprElim()(Before)
+    tvm.ir.assert_structural_equal(after, Expected)
+
+
 if __name__ == "__main__":
     test_basic()
     test_if_single_branch()
@@ -735,3 +783,5 @@ if __name__ == "__main__":
     test_let_value_cse()
     test_nested_let_no_extraction()
     test_let_floordiv_pattern()
+    test_buffer_definition_no_extraction()
+    test_buffer_definition_keeps_shape()
