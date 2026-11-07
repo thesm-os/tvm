@@ -846,6 +846,32 @@ def test_try_unaligned_vector_load():
     assert np.allclose(c, expected), f"expected={expected}\nactual={c}"
 
 
+@tvm.testing.requires_cuda
+def test_vector_load_of_bound_base():
+    @T.prim_func
+    def main(
+        A_data: T.handle("float32", "global"),
+        B_data: T.handle("float32", "global"),
+        row: T.int32,
+    ):
+        T.func_attr(
+            {
+                "global_symbol": "main",
+                "calling_conv": 2,
+                "tirx.kernel_launch_params": [],
+                "target": T.target("cuda"),
+            }
+        )
+        A = T.decl_buffer((256,), "float32", data=A_data)
+        B = T.decl_buffer((256,), "float32", data=B_data)
+        base: T.int32 = row * 4
+        B[T.Ramp(base, 1, 4)] = A[T.Ramp(base, 1, 4)]
+
+    mod = tvm.target.codegen.build_module(tvm.IRModule({"main": main}), tvm.target.Target("cuda"))
+    # The base is a multiple of 4 through its binding, so the load is one vector load.
+    assert "*(float4*)(A + base)" in mod.inspect_source()
+
+
 @tvm.testing.requires_gpu
 @tvm.testing.requires_cuda
 def test_cuda_thread_sync_inside_condition():
